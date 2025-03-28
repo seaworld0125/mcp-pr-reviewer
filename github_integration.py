@@ -8,6 +8,11 @@ from dotenv import load_dotenv
 load_dotenv()
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
 
+# Define review states as constants
+REVIEW_STATE_COMMENT = "COMMENT"
+REVIEW_STATE_APPROVE = "APPROVE" 
+REVIEW_STATE_REQUEST_CHANGES = "REQUEST_CHANGES"
+
 def fetch_pr_changes(repo_owner: str, repo_name: str, pr_number: int) -> Dict[str, Any]:
     """Fetch changes from a GitHub pull request.
     
@@ -20,6 +25,11 @@ def fetch_pr_changes(repo_owner: str, repo_name: str, pr_number: int) -> Dict[st
         A dictionary containing PR information and changes
     """
     print(f" Fetching PR changes for {repo_owner}/{repo_name}#{pr_number}")
+    
+    # Validate GitHub token
+    if not GITHUB_TOKEN:
+        print("ERROR: GitHub token not found in environment variables")
+        return {"error": "GitHub token not found"}
     
     # Fetch PR details
     pr_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/pulls/{pr_number}"
@@ -67,13 +77,19 @@ def fetch_pr_changes(repo_owner: str, repo_name: str, pr_number: int) -> Dict[st
         print(f"Successfully fetched {len(changes)} changes")
         return pr_info
         
+    except requests.exceptions.HTTPError as http_err:
+        error_msg = f"HTTP error fetching PR changes: {str(http_err)}"
+        print(error_msg)
+        return {"error": error_msg, "status_code": http_err.response.status_code}
     except Exception as e:
-        print(f"Error fetching PR changes: {str(e)}")
+        error_msg = f"Error fetching PR changes: {str(e)}"
+        print(error_msg)
         traceback.print_exc()
-        return None
+        return {"error": error_msg}
 
 def submit_pr_review(repo_owner: str, repo_name: str, pr_number: int, review_body: str, 
-                    review_state: str = "COMMENT", comments: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+                    review_state: str = REVIEW_STATE_COMMENT, 
+                    comments: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Submit a review to a GitHub pull request.
     
     Args:
@@ -85,9 +101,21 @@ def submit_pr_review(repo_owner: str, repo_name: str, pr_number: int, review_bod
         comments: Optional list of review comments on specific lines/files
         
     Returns:
-        The API response containing the submitted review information
+        The API response containing the submitted review information or error details
     """
     print(f"Submitting review for {repo_owner}/{repo_name}#{pr_number}")
+    
+    # Validate GitHub token
+    if not GITHUB_TOKEN:
+        print("ERROR: GitHub token not found in environment variables")
+        return {"error": "GitHub token not found"}
+    
+    # Validate review state
+    valid_states = [REVIEW_STATE_COMMENT, REVIEW_STATE_APPROVE, REVIEW_STATE_REQUEST_CHANGES]
+    if review_state not in valid_states:
+        error_msg = f"Invalid review state: {review_state}. Must be one of {valid_states}"
+        print(error_msg)
+        return {"error": error_msg}
     
     review_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/pulls/{pr_number}/reviews"
     headers = {
@@ -112,12 +140,21 @@ def submit_pr_review(repo_owner: str, repo_name: str, pr_number: int, review_bod
         response_data = review_response.json()
         
         print(f"Successfully submitted review (ID: {response_data.get('id')})")
-        return response_data
+        return {
+            "success": True,
+            "review_id": response_data.get("id"),
+            "review_url": response_data.get("html_url")
+        }
         
+    except requests.exceptions.HTTPError as http_err:
+        error_msg = f"HTTP error submitting PR review: {str(http_err)}"
+        print(error_msg)
+        return {"success": False, "error": error_msg, "status_code": http_err.response.status_code}
     except Exception as e:
-        print(f"Error submitting PR review: {str(e)}")
+        error_msg = f"Error submitting PR review: {str(e)}"
+        print(error_msg)
         traceback.print_exc()
-        return {"error": str(e)}
+        return {"success": False, "error": error_msg}
 
 def add_pr_comment(repo_owner: str, repo_name: str, pr_number: int, comment: str) -> Dict[str, Any]:
     """Add a comment to a GitHub pull request.
@@ -129,9 +166,14 @@ def add_pr_comment(repo_owner: str, repo_name: str, pr_number: int, comment: str
         comment: The comment text
         
     Returns:
-        The API response containing the comment information
+        The API response containing the comment information or error details
     """
     print(f"Adding comment to {repo_owner}/{repo_name}#{pr_number}")
+    
+    # Validate GitHub token
+    if not GITHUB_TOKEN:
+        print("ERROR: GitHub token not found in environment variables")
+        return {"success": False, "error": "GitHub token not found"}
     
     comment_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/issues/{pr_number}/comments"
     headers = {
@@ -150,9 +192,18 @@ def add_pr_comment(repo_owner: str, repo_name: str, pr_number: int, comment: str
         response_data = comment_response.json()
         
         print(f"Successfully added comment (ID: {response_data.get('id')})")
-        return response_data
+        return {
+            "success": True,
+            "comment_id": response_data.get("id"),
+            "comment_url": response_data.get("html_url")
+        }
         
+    except requests.exceptions.HTTPError as http_err:
+        error_msg = f"HTTP error adding PR comment: {str(http_err)}"
+        print(error_msg)
+        return {"success": False, "error": error_msg, "status_code": http_err.response.status_code}
     except Exception as e:
-        print(f"Error adding PR comment: {str(e)}")
+        error_msg = f"Error adding PR comment: {str(e)}"
+        print(error_msg)
         traceback.print_exc()
-        return {"error": str(e)}
+        return {"success": False, "error": error_msg}

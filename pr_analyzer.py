@@ -1,9 +1,17 @@
 import sys
 import os
 import traceback
+import asyncio
 from typing import Any, List, Dict, Optional
 from mcp.server.fastmcp import FastMCP
-from github_integration import fetch_pr_changes, submit_pr_review, add_pr_comment
+from github_integration import (
+    fetch_pr_changes, 
+    submit_pr_review, 
+    add_pr_comment,
+    REVIEW_STATE_COMMENT,
+    REVIEW_STATE_APPROVE,
+    REVIEW_STATE_REQUEST_CHANGES
+)
 from notion_client import Client
 from dotenv import load_dotenv
 
@@ -91,8 +99,8 @@ class PRAnalyzer:
                                         "review_body": {"type": "string"},
                                         "review_state": {
                                             "type": "string", 
-                                            "enum": ["COMMENT", "APPROVE", "REQUEST_CHANGES"],
-                                            "default": "COMMENT"
+                                            "enum": [REVIEW_STATE_COMMENT, REVIEW_STATE_APPROVE, REVIEW_STATE_REQUEST_CHANGES],
+                                            "default": REVIEW_STATE_COMMENT
                                         },
                                         "comments": {
                                             "type": "array",
@@ -138,19 +146,22 @@ class PRAnalyzer:
             """Fetch changes from a GitHub pull request."""
             print(f"Fetching PR #{pr_number} from {repo_owner}/{repo_name}", file=sys.stderr)
             try:
+                # Execute synchronous function directly
                 pr_info = fetch_pr_changes(repo_owner, repo_name, pr_number)
-                if pr_info is None:
-                    print("No changes returned from fetch_pr_changes", file=sys.stderr)
-                    return {}
+                
+                if pr_info is None or "error" in pr_info:
+                    print(f"Error fetching PR changes: {pr_info.get('error', 'Unknown error')}", file=sys.stderr)
+                    return {"success": False, "error": pr_info.get('error', 'Unknown error')}
+                
                 print(f"Successfully fetched PR information", file=sys.stderr)
                 return pr_info
             except Exception as e:
                 print(f"Error fetching PR: {str(e)}", file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
-                return {}
+                return {"success": False, "error": str(e)}
         
         @self.mcp.tool()
-        async def create_notion_page(title: str, content: str) -> str:
+        async def create_notion_page(title: str, content: str) -> Dict[str, Any]:
             """Create a Notion page with PR analysis."""
             print(f"Creating Notion page: {title}", file=sys.stderr)
             try:
@@ -169,12 +180,15 @@ class PRAnalyzer:
                     }]
                 )
                 print(f"Notion page '{title}' created successfully!", file=sys.stderr)
-                return f"Notion page '{title}' created successfully!"
+                return {
+                    "success": True,
+                    "message": f"Notion page '{title}' created successfully!"
+                }
             except Exception as e:
                 error_msg = f"Error creating Notion page: {str(e)}"
                 print(error_msg, file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
-                return error_msg
+                return {"success": False, "error": error_msg}
         
         @self.mcp.tool()
         async def submit_pr_review(
@@ -182,12 +196,13 @@ class PRAnalyzer:
             repo_name: str, 
             pr_number: int, 
             review_body: str, 
-            review_state: str = "COMMENT", 
+            review_state: str = REVIEW_STATE_COMMENT, 
             comments: Optional[List[Dict[str, Any]]] = None
         ) -> Dict[str, Any]:
             """Submit a review to a GitHub pull request."""
             print(f"Submitting review for PR #{pr_number} from {repo_owner}/{repo_name}", file=sys.stderr)
             try:
+                # Execute synchronous function directly
                 review_response = submit_pr_review(
                     repo_owner, 
                     repo_name, 
@@ -198,11 +213,11 @@ class PRAnalyzer:
                 )
                 
                 if "error" in review_response:
-                    print(f"Error in submit_pr_review: {review_response['error']}", file=sys.stderr)
-                    return {"success": False, "error": review_response["error"]}
+                    print(f"Error in submit_pr_review: {review_response.get('error', 'Unknown error')}", file=sys.stderr)
+                    return {"success": False, "error": review_response.get("error", "Unknown error")}
                 
                 print(f"Successfully submitted PR review", file=sys.stderr)
-                return {"success": True, "review_id": review_response.get("id"), "review_url": review_response.get("html_url")}
+                return review_response
             except Exception as e:
                 error_msg = f"Error submitting PR review: {str(e)}"
                 print(error_msg, file=sys.stderr)
@@ -219,19 +234,16 @@ class PRAnalyzer:
             """Add a comment to a GitHub pull request."""
             print(f"Adding comment to PR #{pr_number} from {repo_owner}/{repo_name}", file=sys.stderr)
             try:
-                comment_response = add_pr_comment(
+                # Execute synchronous function directly - this is where we need to fix the issue
+                result = add_pr_comment(
                     repo_owner, 
                     repo_name, 
                     pr_number, 
                     comment
                 )
                 
-                if "error" in comment_response:
-                    print(f"Error in add_pr_comment: {comment_response['error']}", file=sys.stderr)
-                    return {"success": False, "error": comment_response["error"]}
-                
-                print(f"Successfully added PR comment", file=sys.stderr)
-                return {"success": True, "comment_id": comment_response.get("id"), "comment_url": comment_response.get("html_url")}
+                # Return the result directly
+                return result
             except Exception as e:
                 error_msg = f"Error adding PR comment: {str(e)}"
                 print(error_msg, file=sys.stderr)
