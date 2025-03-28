@@ -1,0 +1,34 @@
+{
+  "mcpServers": {
+    "notion": {
+      "command": "npx",
+      "args": ["-y", "@suekou/mcp-notion-server"],
+      "env": {
+        "NOTION_API_TOKEN": "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"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/taekyeong"
+      ]
+    },
+    "jetbrains": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@jetbrains/mcp-proxy"
+      ]
+    },
+    "pr-analyzer": {
+      "command": "/bin/bash",
+      "args": ["/Users/taekyeong/IdeaProjects/pr_reviewer/run.sh"],
+      "env": {
+        "PATH": "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+      },
+      "workingDirectory": "/Users/taekyeong/IdeaProjects/pr_reviewer"
+    }
+  }
+}
