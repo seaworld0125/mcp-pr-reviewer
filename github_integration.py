@@ -1,13 +1,14 @@
 import os
 import requests
 import traceback
+from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
 
-def fetch_pr_changes(repo_owner: str, repo_name: str, pr_number: int) -> list:
+def fetch_pr_changes(repo_owner: str, repo_name: str, pr_number: int) -> Dict[str, Any]:
     """Fetch changes from a GitHub pull request.
     
     Args:
@@ -16,7 +17,7 @@ def fetch_pr_changes(repo_owner: str, repo_name: str, pr_number: int) -> list:
         pr_number: The number of the pull request to analyze
         
     Returns:
-        A list of file changes with detailed information about each change
+        A dictionary containing PR information and changes
     """
     print(f" Fetching PR changes for {repo_owner}/{repo_name}#{pr_number}")
     
@@ -71,6 +72,87 @@ def fetch_pr_changes(repo_owner: str, repo_name: str, pr_number: int) -> list:
         traceback.print_exc()
         return None
 
-# Example usage for debugging
-# pr_data = fetch_pr_changes('owner', 'repo', 1)
-# print(pr_data) 
+def submit_pr_review(repo_owner: str, repo_name: str, pr_number: int, review_body: str, 
+                    review_state: str = "COMMENT", comments: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Submit a review to a GitHub pull request.
+    
+    Args:
+        repo_owner: The owner of the GitHub repository
+        repo_name: The name of the GitHub repository
+        pr_number: The number of the pull request to review
+        review_body: The main review comment body
+        review_state: The state of the review ('COMMENT', 'APPROVE', or 'REQUEST_CHANGES')
+        comments: Optional list of review comments on specific lines/files
+        
+    Returns:
+        The API response containing the submitted review information
+    """
+    print(f"Submitting review for {repo_owner}/{repo_name}#{pr_number}")
+    
+    review_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/pulls/{pr_number}/reviews"
+    headers = {
+        'Authorization': f'token {GITHUB_TOKEN}',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+    
+    # Prepare review payload
+    review_data = {
+        "body": review_body,
+        "event": review_state
+    }
+    
+    # Add line-specific comments if provided
+    if comments:
+        review_data["comments"] = comments
+    
+    try:
+        # Submit the review
+        review_response = requests.post(review_url, headers=headers, json=review_data)
+        review_response.raise_for_status()
+        response_data = review_response.json()
+        
+        print(f"Successfully submitted review (ID: {response_data.get('id')})")
+        return response_data
+        
+    except Exception as e:
+        print(f"Error submitting PR review: {str(e)}")
+        traceback.print_exc()
+        return {"error": str(e)}
+
+def add_pr_comment(repo_owner: str, repo_name: str, pr_number: int, comment: str) -> Dict[str, Any]:
+    """Add a comment to a GitHub pull request.
+    
+    Args:
+        repo_owner: The owner of the GitHub repository
+        repo_name: The name of the GitHub repository
+        pr_number: The number of the pull request to comment on
+        comment: The comment text
+        
+    Returns:
+        The API response containing the comment information
+    """
+    print(f"Adding comment to {repo_owner}/{repo_name}#{pr_number}")
+    
+    comment_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/issues/{pr_number}/comments"
+    headers = {
+        'Authorization': f'token {GITHUB_TOKEN}',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+    
+    comment_data = {
+        "body": comment
+    }
+    
+    try:
+        # Submit the comment
+        comment_response = requests.post(comment_url, headers=headers, json=comment_data)
+        comment_response.raise_for_status()
+        response_data = comment_response.json()
+        
+        print(f"Successfully added comment (ID: {response_data.get('id')})")
+        return response_data
+        
+    except Exception as e:
+        print(f"Error adding PR comment: {str(e)}")
+        traceback.print_exc()
+        return {"error": str(e)}
